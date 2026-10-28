@@ -61,6 +61,24 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 - **과거 노출은 해소되지 않았습니다.** 옛 커밋 `5b9af2f`가 공개 저장소에 남아 메모 네 건을 누구나 읽을 수 있습니다.
 - 옛 배포 주소가 아직 1단계 `data.json`을 내보내고 있을 수 있습니다. 확인 전까지는 노출 중으로 봅니다.
 - Supabase REST API(`/rest/v1/notes`)에 anon 키로 보낸 비로그인 요청 시험은 **미실행**입니다. 차단 여부는 SQL Editor의 권한·RLS 확인 표로만 확인했습니다.
-- 메모를 로그인 사용자에게 돌려주는 보호된 자료 API는 아직 없습니다. 화면 `/`은 빈 목록을 보여 주고, 빌드는 여전히 `data.json`을 `public/`에 복사하며, `aleph.config.json`의 `step`과 `src/attack-check.mjs`는 1단계 그대로입니다.
+- 메모를 로그인 사용자에게 돌려주는 보호된 자료 API는 아직 없습니다. 빌드는 아직 빈 `data.json`을 `public/`에 복사합니다. 3단계에서 이 복사를 끝냅니다.
+
+## 현재 상태: 2단계 저장점
+
+- 작동하는 것: 첫 화면 `/`은 공개 `data.json`을 읽어 "공개 파일에 남은 메모가 없습니다"를 보여 줍니다. `/data.json`은 확인 표시와 빈 `notes`만 내보내고, `/aleph.json`은 배포 저장소·커밋·단계(2)를 내보냅니다. 모든 응답에 `X-Content-Type-Options: nosniff`가 붙습니다.
+- 메모 네 건은 Supabase `public.notes`에만 있습니다(RLS 켜짐, 정책 없음, anon·authenticated 권한 없음, `owner_id`는 비어 있음).
+- 빌드 보호: `step`이 2인데 `data.json`에 메모가 다시 들어가면 `npm run build`가 실패합니다.
+- 아직 없는 것: 로그인, 보호된 자료 API, 판정 규칙(`RULE_IDS`는 시작 틀의 전체 거부 규칙 하나뿐).
+
+다시 실행하는 방법:
+
+```bash
+npm ci
+npm run build -- --local     # 로컬 화면만 확인 (배포·접수 증명 아님)
+npm run test:r5 && npm run test:package
+npm run bundle               # bundle-notes.json(커밋하지 않음)이 있어야 하며, 배포 주소에 실제 비로그인 요청을 보냄
+```
+
+`npm run bundle`의 점검 결과는 학생이 직접 보낸 요청의 기록이며 심판의 판정이 아닙니다.
 
 `src/decider.mjs`와 `src/detect.mjs`의 로컬 시험은 반 엔진이나 운영 심판의 결과가 아닙니다. 1단계 이후 제출 묶음 계약 `aleph.defense.submission.v2`는 `scripts/bundle.mjs`에 남아 있으며, 코딩 도구가 해당 단계의 최신 배포 주소와 Git 원격을 맞춘 뒤 사용합니다.
