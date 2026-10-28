@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { deploymentIdentity } from './deployment-identity.mjs';
 
@@ -9,17 +9,20 @@ const config = JSON.parse(await readFile(resolve(root, 'aleph.config.json'), 'ut
 if (config.step !== 1 && config.step !== 2) {
   throw new Error('3단계부터는 공개 data.json 복사를 끝내고 보호된 자료 API로 바꾸세요.');
 }
-const data = JSON.parse(await readFile(source, 'utf8'));
-if (!Array.isArray(data.notes)) {
-  throw new Error('실습용 공개 자료 형식을 확인하세요. 실제 학생 자료를 넣으면 안 됩니다.');
+if (config.step === 1) {
+  const data = JSON.parse(await readFile(source, 'utf8'));
+  if (!Array.isArray(data.notes)) {
+    throw new Error('실습용 공개 자료 형식을 확인하세요. 실제 학생 자료를 넣으면 안 됩니다.');
+  }
+  await mkdir(resolve(root, 'public'), { recursive: true });
+  await copyFile(source, output);
+  console.log('실습용 공개 자료를 public/data.json에 복사했습니다.');
+} else {
+  // 2단계부터 메모는 Supabase 테이블에만 두고 화면은 /api/notes 서버 함수로 읽습니다.
+  // 공개 폴더에 data.json이 남아 있으면 지워서 정적 메모·확인 표시가 배포되지 않게 합니다.
+  await rm(output, { force: true });
+  console.log('2단계: 공개 data.json을 만들지 않습니다. 메모는 /api/notes에서 읽습니다.');
 }
-// 2단계부터 메모는 Supabase 테이블에만 둡니다. 공개 data.json에 메모가 다시 들어가면 빌드를 멈춥니다.
-if (config.step >= 2 && data.notes.length !== 0) {
-  throw new Error('2단계부터 공개 data.json에는 메모를 남기지 마세요. 메모는 Supabase 테이블에 있습니다.');
-}
-await mkdir(resolve(root, 'public'), { recursive: true });
-await copyFile(source, output);
-console.log('실습용 공개 자료를 public/data.json에 복사했습니다.');
 if (!process.argv.includes('--local')) {
   const identity = deploymentIdentity(process.env, config);
   await writeFile(resolve(root, 'public', 'aleph.json'),
