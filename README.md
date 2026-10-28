@@ -93,12 +93,23 @@ npm run test:r5
 npm run bundle               # bundle-notes.json(커밋하지 않음)이 있어야 하며, 배포 주소에 실제 비로그인 요청을 보냄
 ```
 
-## 3단계 진행 중: 로그인 토큰 검사
+## 3단계 진행 중: 로그인과 메모 API
 
 - 첫 화면에 Supabase Auth 이메일·비밀번호 로그인·로그아웃이 있습니다(공식 `supabase-js`, 공개용 URL·publishable key만 화면 코드에 있음).
-- `/api/notes`는 시작 틀의 `src/verify-login.mjs`(`createLoginVerifier`)로 `Authorization: Bearer` 토큰만 검사합니다. 토큰이 없거나 검사에 실패하면 자료 없이 `401 LOGIN_REQUIRED`입니다. 브라우저가 보낸 userId·role·쿼리·본문은 읽지 않습니다.
+- 모든 메모 API는 시작 틀의 `src/verify-login.mjs`(`createLoginVerifier`)로 `Authorization: Bearer` 토큰만 검사합니다. 토큰이 없거나 검사에 실패하면 자료 없이 `401 LOGIN_REQUIRED`입니다. 브라우저가 보낸 userId·role·owner_id는 읽지 않습니다.
 - 검사에 쓰는 발급자 정보는 `aleph.config.json`의 `identityProvider`(issuer, audience, jwksUrl)에 있습니다. 비밀 키는 Vercel 환경변수 `SUPABASE_SECRET_KEY`에만 있습니다.
-- 화면은 로그인하지 않으면 "로그인하면 메모가 보입니다."를 보여 주고, 로그인하면 토큰을 실어 `/api/notes`를 부릅니다.
+
+| 경로 | 요청 | 응답 |
+|---|---|---|
+| `GET /api/notes` | - | 로그인 사용자(`owner_id` = 서버가 확인한 ID)의 메모 배열 `[{id,title,body}]` |
+| `POST /api/notes` | `{id?, title, body}` (id는 UUID, 없으면 서버가 생성) | `201 {id}`, 같은 id면 409. `owner_id`는 서버가 확인한 ID |
+| `GET /api/notes/:id` | - | `{id,title,body}`, 없으면 404 |
+| `PUT /api/notes/:id` | `{title, body}` | 수정된 `{id,title,body}`, 없으면 404 |
+| `DELETE /api/notes/:id` | - | 204, 지운 뒤 GET은 404 |
+
+- 같은 경로를 `aleph.config.json`의 `allowedRoutes`에 적었습니다. 처리 코드는 `src/notes-api.mjs`, 경로 파일은 `api/notes.js`, `api/notes/[id].js`입니다.
+- 메모의 UUID는 `notes.note_id` 칸입니다(`supabase/step3-notes-uuid-id.sql`). 1단계에서 옮긴 가상 메모 네 건은 `owner_id`가 비어 있어 누구의 목록에도 나오지 않습니다.
+- **알려진 허점(4단계에서 고침):** 한 건 GET·PUT·DELETE는 아직 소유자를 검사하지 않습니다. 로그인한 B가 A 메모의 id를 알면 읽고 고치고 지울 수 있습니다.
 
 `npm run bundle`의 점검 결과는 학생이 직접 보낸 요청의 기록이며 심판의 판정이 아닙니다.
 

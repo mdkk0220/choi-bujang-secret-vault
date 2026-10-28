@@ -27,14 +27,24 @@
     .auth-state.in { color: #9be7a8; }
     .auth-error { margin: 10px 0 0; color: #ffb4c0; min-height: 1em; }
     [hidden] { display: none !important; }
+    .editor { margin: 26px 0 12px; padding: 18px; border: 1px solid #51667c; border-radius: 14px; background: #1a2a3d; display: grid; gap: 10px; }
+    .editor h2 { margin: 0; font-size: 20px; }
+    .editor input, .editor textarea, li input, li textarea { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #51667c; background: #101a28; color: #ecf4ff; width: 100%; box-sizing: border-box; }
+    .editor textarea, li textarea { min-height: 72px; resize: vertical; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .btn { font: inherit; font-size: 15px; font-weight: 700; padding: 8px 12px; border-radius: 10px; border: 0; background: #8ad8df; color: #101a28; cursor: pointer; }
+    .btn.ghost { background: transparent; color: #8ad8df; border: 1px solid #8ad8df; }
+    .btn.danger { background: transparent; color: #ffb4c0; border: 1px solid #ffb4c0; }
+    .btn:disabled { opacity: .6; cursor: wait; }
+    .notes-error { color: #ffb4c0; min-height: 1em; margin: 6px 0 0; }
   </style>
 </head>
 <body>
   <main>
     <div class="eyebrow">BYTE BACK · 2단계 자료를 코드 밖으로</div>
     <h1>점령된 자료실</h1>
-    <p>가상 메모는 공개 파일에서 빼서 학습용 Supabase 테이블로 옮겼습니다. 로그인한 사용자만 같은 주소의 서버 함수에서 메모를 받습니다.</p>
-    <div class="notice">옛 공개 커밋과 옛 배포에는 1단계 메모가 남아 있을 수 있습니다. 메모 요청은 로그인 토큰을 서버에서 검사한 뒤에만 응답합니다.</div>
+    <p>가상 메모는 공개 파일에서 빼서 학습용 Supabase 테이블로 옮겼습니다. 로그인한 사용자는 같은 주소의 서버 API로 자기 가상 메모를 추가·수정·삭제할 수 있습니다.</p>
+    <div class="notice">옛 공개 커밋과 옛 배포에는 1단계 메모가 남아 있을 수 있습니다. 메모 요청은 로그인 토큰을 서버에서 검사한 뒤에만 응답합니다. 아직 소유자 검사는 없어 다른 사람의 메모 id를 알면 고칠 수 있습니다(4단계에서 막습니다).</div>
     <section class="auth" aria-labelledby="auth-title">
       <h2 id="auth-title">로그인</h2>
       <p id="auth-state" class="auth-state" aria-live="polite">로그인 상태를 확인하는 중입니다.</p>
@@ -46,6 +56,13 @@
       <button id="logout-button" type="button" hidden>로그아웃</button>
       <p id="auth-error" class="auth-error" role="alert"></p>
     </section>
+    <form id="note-form" class="editor" hidden>
+      <h2>새 가상 메모</h2>
+      <input id="note-title" maxlength="200" placeholder="제목" required aria-label="제목">
+      <textarea id="note-body" maxlength="5000" placeholder="내용 (실제 개인정보는 쓰지 마세요)" aria-label="내용"></textarea>
+      <div class="row"><button class="btn" id="note-add" type="submit">추가</button></div>
+    </form>
+    <p id="notes-error" class="notes-error" role="alert"></p>
     <ul id="notes" aria-live="polite"><li>로그인 상태를 확인하는 중입니다.</li></ul>
   </main>
   <script type="module">
@@ -77,50 +94,138 @@
     };
 
     const list = document.querySelector('#notes');
+    const noteForm = document.querySelector('#note-form');
+    const noteTitle = document.querySelector('#note-title');
+    const noteBody = document.querySelector('#note-body');
+    const notesError = document.querySelector('#notes-error');
+    let currentSession = null;
     const showMessage = text => {
       const item = document.createElement('li');
       item.textContent = text;
       list.replaceChildren(item);
     };
+    // 로그인 토큰만 보냅니다. 사용자 번호·역할·소유자는 서버가 토큰에서 직접 확인합니다.
+    const api = async (path, options = {}) => {
+      if (!currentSession?.access_token) throw new Error('로그인이 필요합니다.');
+      const response = await fetch(path, {
+        ...options,
+        cache: 'no-store',
+        headers: { Authorization: `Bearer ${currentSession.access_token}`,
+          ...(options.body ? { 'Content-Type': 'application/json' } : {}) },
+      });
+      if (response.status === 401) throw new Error('로그인 확인에 실패했습니다. 다시 로그인하세요.');
+      if (response.status === 404) throw new Error('메모를 찾을 수 없습니다. (HTTP 404)');
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(`요청을 처리하지 못했습니다. (HTTP ${response.status}${detail.error ? `, ${detail.error}` : ''})`);
+      }
+      return response.status === 204 ? null : response.json();
+    };
+
+    const noteItem = note => {
+      const item = document.createElement('li');
+      const view = () => {
+        const title = document.createElement('strong');
+        const content = document.createElement('span');
+        title.textContent = note.title;
+        content.textContent = note.body;
+        const row = document.createElement('div');
+        row.className = 'row';
+        const edit = document.createElement('button');
+        edit.className = 'btn ghost'; edit.type = 'button'; edit.textContent = '수정';
+        const remove = document.createElement('button');
+        remove.className = 'btn danger'; remove.type = 'button'; remove.textContent = '삭제';
+        edit.addEventListener('click', editMode);
+        remove.addEventListener('click', async () => {
+          notesError.textContent = '';
+          remove.disabled = true;
+          try {
+            await api(`/api/notes/${encodeURIComponent(note.id)}`, { method: 'DELETE' });
+            await loadNotes();
+          } catch (error) {
+            notesError.textContent = `삭제 실패: ${error.message}`;
+            remove.disabled = false;
+          }
+        });
+        row.append(edit, remove);
+        item.replaceChildren(title, content, row);
+      };
+      const editMode = () => {
+        const title = document.createElement('input');
+        title.maxLength = 200; title.value = note.title; title.setAttribute('aria-label', '제목 수정');
+        const body = document.createElement('textarea');
+        body.maxLength = 5000; body.value = note.body; body.setAttribute('aria-label', '내용 수정');
+        const row = document.createElement('div');
+        row.className = 'row';
+        const save = document.createElement('button');
+        save.className = 'btn'; save.type = 'button'; save.textContent = '저장';
+        const cancel = document.createElement('button');
+        cancel.className = 'btn ghost'; cancel.type = 'button'; cancel.textContent = '취소';
+        cancel.addEventListener('click', view);
+        save.addEventListener('click', async () => {
+          notesError.textContent = '';
+          if (!title.value.trim()) { notesError.textContent = '수정 실패: 제목을 입력하세요.'; return; }
+          save.disabled = true;
+          try {
+            note = await api(`/api/notes/${encodeURIComponent(note.id)}`, {
+              method: 'PUT', body: JSON.stringify({ title: title.value, body: body.value }),
+            });
+            view();
+          } catch (error) {
+            notesError.textContent = `수정 실패: ${error.message}`;
+            save.disabled = false;
+          }
+        });
+        row.append(save, cancel);
+        item.replaceChildren(title, body, row);
+        title.focus();
+      };
+      view();
+      return item;
+    };
+
     let notesRequest = 0;
-    const loadNotes = async session => {
+    const loadNotes = async () => {
       const ticket = ++notesRequest;
-      if (!session?.access_token) {
+      notesError.textContent = '';
+      if (!currentSession?.access_token) {
         showMessage('로그인하면 메모가 보입니다.');
         return;
       }
       showMessage('메모를 불러오는 중입니다.');
       try {
-        // 로그인 토큰만 보냅니다. 사용자 번호나 역할은 서버가 토큰에서 직접 확인합니다.
-        const response = await fetch('/api/notes', {
-          cache: 'no-store',
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
+        const notes = await api('/api/notes');
         if (ticket !== notesRequest) return;
-        if (response.status === 401) throw new Error('로그인 확인에 실패해 메모를 받지 못했습니다.');
-        if (!response.ok) throw new Error(`서버 함수에서 메모를 읽을 수 없습니다. (HTTP ${response.status})`);
-        const data = await response.json();
-        if (!Array.isArray(data.notes)) throw new Error('자료 형식이 맞지 않습니다.');
-        if (data.notes.length === 0) {
-          showMessage('테이블에 메모가 없습니다.');
-          return;
-        }
-        list.replaceChildren(...data.notes.map(note => {
-          const item = document.createElement('li');
-          const title = document.createElement('strong');
-          const content = document.createElement('span');
-          title.textContent = note.title;
-          content.textContent = note.content;
-          item.append(title, content);
-          return item;
-        }));
+        if (!Array.isArray(notes)) throw new Error('자료 형식이 맞지 않습니다.');
+        if (notes.length === 0) showMessage('내 메모가 없습니다. 위에서 새 가상 메모를 추가해 보세요.');
+        else list.replaceChildren(...notes.map(noteItem));
       } catch (error) {
         if (ticket === notesRequest) showMessage(error.message);
       }
     };
 
+    noteForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      notesError.textContent = '';
+      const addButton = document.querySelector('#note-add');
+      addButton.disabled = true;
+      try {
+        await api('/api/notes', { method: 'POST', body: JSON.stringify({ title: noteTitle.value, body: noteBody.value }) });
+        noteTitle.value = '';
+        noteBody.value = '';
+        await loadNotes();
+      } catch (error) {
+        notesError.textContent = `추가 실패: ${error.message}`;
+      } finally {
+        addButton.disabled = false;
+      }
+    });
+
     const render = session => {
-      loadNotes(session);
+      const changedUser = currentSession?.user?.id !== session?.user?.id;
+      currentSession = session ?? null;
+      noteForm.hidden = !session?.user;
+      if (changedUser || !session) loadNotes();
       const signedIn = Boolean(session?.user);
       state.textContent = signedIn ? `로그인됨: ${session.user.email}` : '로그인하지 않음';
       state.classList.toggle('in', signedIn);
