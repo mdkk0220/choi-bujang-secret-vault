@@ -7,8 +7,16 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/notes.js": {
+      "includeFiles": "aleph.config.json"
+    }
+  }
 }

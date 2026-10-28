@@ -61,7 +61,7 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 - **과거 노출은 해소되지 않았습니다.** 옛 커밋 `5b9af2f`가 공개 저장소에 남아 메모 네 건을 누구나 읽을 수 있습니다.
 - 옛 배포 주소가 아직 1단계 `data.json`을 내보내고 있을 수 있습니다. 확인 전까지는 노출 중으로 봅니다.
 - Supabase REST API(`/rest/v1/notes`)에 anon 키로 보낸 비로그인 요청 시험은 **미실행**입니다. 차단 여부는 SQL Editor의 권한·RLS 확인 표로만 확인했습니다.
-- 로그인은 아직 없습니다. `/api/notes`는 누구에게나 메모를 돌려줍니다. 3단계에서 로그인 확인을 추가합니다.
+- (3단계에서 반영) `/api/notes`는 이제 로그인 토큰을 검사합니다. 아래 "3단계 진행 중"을 보세요.
 
 ## 현재 상태: 2단계 (서버 함수로 메모 읽기)
 
@@ -75,7 +75,7 @@ Vercel 환경변수(값은 Vercel 프로젝트 설정의 비밀 입력란에만 
 
 | 이름 | 용도 | 값을 받는 곳 |
 |---|---|---|
-| `SUPABASE_URL` | 학습용 Supabase 프로젝트 주소 | Supabase 대시보드의 프로젝트 설정 > API |
+| `SUPABASE_URL` | 3단계부터 쓰지 않음. 주소는 `aleph.config.json`의 `identityProvider.issuer`에서 가져옴 | - |
 | `SUPABASE_SECRET_KEY` | 서버 함수 전용 키(RLS를 우회하므로 화면 코드에 넣지 않음) | Supabase 대시보드의 API Keys > Secret key |
 
 확인 방법:
@@ -92,6 +92,13 @@ npm run build -- --local     # 로컬 화면만 확인 (서버 함수·배포·�
 npm run test:r5
 npm run bundle               # bundle-notes.json(커밋하지 않음)이 있어야 하며, 배포 주소에 실제 비로그인 요청을 보냄
 ```
+
+## 3단계 진행 중: 로그인 토큰 검사
+
+- 첫 화면에 Supabase Auth 이메일·비밀번호 로그인·로그아웃이 있습니다(공식 `supabase-js`, 공개용 URL·publishable key만 화면 코드에 있음).
+- `/api/notes`는 시작 틀의 `src/verify-login.mjs`(`createLoginVerifier`)로 `Authorization: Bearer` 토큰만 검사합니다. 토큰이 없거나 검사에 실패하면 자료 없이 `401 LOGIN_REQUIRED`입니다. 브라우저가 보낸 userId·role·쿼리·본문은 읽지 않습니다.
+- 검사에 쓰는 발급자 정보는 `aleph.config.json`의 `identityProvider`(issuer, audience, jwksUrl)에 있습니다. 비밀 키는 Vercel 환경변수 `SUPABASE_SECRET_KEY`에만 있습니다.
+- 화면은 로그인하지 않으면 "로그인하면 메모가 보입니다."를 보여 주고, 로그인하면 토큰을 실어 `/api/notes`를 부릅니다.
 
 `npm run bundle`의 점검 결과는 학생이 직접 보낸 요청의 기록이며 심판의 판정이 아닙니다.
 
