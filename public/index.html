@@ -16,6 +16,17 @@
     li { border: 1px solid #51667c; border-radius: 14px; padding: 17px 19px; background: #1a2a3d; }
     strong { display: block; font-size: 18px; margin-bottom: 5px; }
     li span { color: #bfd0e5; }
+    .auth { margin: 26px 0; padding: 18px; border: 1px solid #51667c; border-radius: 14px; background: #1a2a3d; }
+    .auth h2 { margin: 0 0 12px; font-size: 20px; }
+    .auth form { display: grid; gap: 10px; }
+    .auth label { display: grid; gap: 4px; font-size: 15px; color: #bfd0e5; }
+    .auth input { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid #51667c; background: #101a28; color: #ecf4ff; }
+    .auth button { font: inherit; font-weight: 700; padding: 10px 14px; border-radius: 10px; border: 0; background: #8ad8df; color: #101a28; cursor: pointer; justify-self: start; }
+    .auth button:disabled { opacity: .6; cursor: wait; }
+    .auth-state { margin: 0 0 12px; font-weight: 700; }
+    .auth-state.in { color: #9be7a8; }
+    .auth-error { margin: 10px 0 0; color: #ffb4c0; min-height: 1em; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
@@ -24,6 +35,17 @@
     <h1>점령된 자료실</h1>
     <p>가상 메모는 공개 파일에서 빼서 학습용 Supabase 테이블로 옮겼습니다. 아래 목록은 같은 주소의 서버 함수가 테이블에서 읽어 온 메모입니다.</p>
     <div class="notice">옛 공개 커밋과 옛 배포에는 1단계 메모가 남아 있을 수 있습니다. 로그인한 사용자에게 메모를 보여 주는 기능은 다음 단계에서 만듭니다.</div>
+    <section class="auth" aria-labelledby="auth-title">
+      <h2 id="auth-title">로그인</h2>
+      <p id="auth-state" class="auth-state" aria-live="polite">로그인 상태를 확인하는 중입니다.</p>
+      <form id="login-form" hidden>
+        <label>이메일 <input id="login-email" type="email" autocomplete="username" required></label>
+        <label>비밀번호 <input id="login-password" type="password" autocomplete="current-password" required></label>
+        <button id="login-button" type="submit">로그인</button>
+      </form>
+      <button id="logout-button" type="button" hidden>로그아웃</button>
+      <p id="auth-error" class="auth-error" role="alert"></p>
+    </section>
     <ul id="notes" aria-live="polite"><li>가상 자료를 불러오는 중입니다.</li></ul>
   </main>
   <script type="module">
@@ -51,6 +73,81 @@
       item.textContent = error.message;
       list.replaceChildren(item);
     }
+  </script>
+  <script type="module">
+    // Supabase Auth 이메일·비밀번호 로그인 (공식 SDK). 아래 두 값은 공개용입니다.
+    // 서버 전용 키(secret/service_role)는 절대 이 파일에 넣지 마세요.
+    const SUPABASE_URL = 'https://jmnqwlnopvadomxdsndu.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_4EeYRi1sTq84w19QHGsKLw_r4Fp8llp';
+
+    const state = document.querySelector('#auth-state');
+    const form = document.querySelector('#login-form');
+    const email = document.querySelector('#login-email');
+    const password = document.querySelector('#login-password');
+    const loginButton = document.querySelector('#login-button');
+    const logoutButton = document.querySelector('#logout-button');
+    const errorBox = document.querySelector('#auth-error');
+
+    const reasons = {
+      invalid_credentials: '이메일 또는 비밀번호가 맞지 않습니다.',
+      email_not_confirmed: '이메일 인증이 끝나지 않은 계정입니다.',
+      user_banned: '사용이 정지된 계정입니다.',
+      over_request_rate_limit: '로그인 시도가 너무 많습니다. 잠시 뒤 다시 시도하세요.',
+      over_email_send_rate_limit: '요청이 너무 많습니다. 잠시 뒤 다시 시도하세요.',
+      validation_failed: '이메일 또는 비밀번호 형식을 확인하세요.',
+    };
+    const explain = error => {
+      const code = error?.code ?? (error?.status ? `HTTP ${error.status}` : 'unknown');
+      const reason = reasons[error?.code] ?? error?.message ?? '알 수 없는 오류입니다.';
+      return `로그인 실패: ${reason} (${code})`;
+    };
+
+    const render = session => {
+      const signedIn = Boolean(session?.user);
+      state.textContent = signedIn ? `로그인됨: ${session.user.email}` : '로그인하지 않음';
+      state.classList.toggle('in', signedIn);
+      form.hidden = signedIn;
+      logoutButton.hidden = !signedIn;
+      if (signedIn) password.value = '';
+    };
+
+    let supabase;
+    try {
+      const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm');
+      supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+      const { data } = await supabase.auth.getSession();
+      render(data.session);
+      supabase.auth.onAuthStateChange((_event, session) => render(session));
+    } catch {
+      state.textContent = '로그인 기능을 불러오지 못했습니다. 새로고침해 주세요.';
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!supabase) return;
+      errorBox.textContent = '';
+      loginButton.disabled = true;
+      try {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.value.trim(),
+          password: password.value,
+        });
+        if (error) errorBox.textContent = explain(error);
+      } catch (error) {
+        errorBox.textContent = explain(error);
+      } finally {
+        loginButton.disabled = false;
+      }
+    });
+
+    logoutButton.addEventListener('click', async () => {
+      if (!supabase) return;
+      errorBox.textContent = '';
+      logoutButton.disabled = true;
+      const { error } = await supabase.auth.signOut();
+      if (error) errorBox.textContent = `로그아웃 실패: ${error.message}`;
+      logoutButton.disabled = false;
+    });
   </script>
 </body>
 </html>
