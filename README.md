@@ -61,45 +61,19 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 - **과거 노출은 해소되지 않았습니다.** 옛 커밋 `5b9af2f`가 공개 저장소에 남아 메모 네 건을 누구나 읽을 수 있습니다.
 - 옛 배포 주소가 아직 1단계 `data.json`을 내보내고 있을 수 있습니다. 확인 전까지는 노출 중으로 봅니다.
 - Supabase REST API(`/rest/v1/notes`)에 anon 키로 보낸 비로그인 요청 시험은 **미실행**입니다. 차단 여부는 SQL Editor의 권한·RLS 확인 표로만 확인했습니다.
-- (3단계에서 반영) `/api/notes`는 이제 로그인 토큰을 검사합니다. 아래 "3단계 진행 중"을 보세요.
+- (3단계에서 반영) 메모 API는 이제 로그인 토큰을 검사합니다. 아래 "현재 상태"를 보세요.
 
-## 현재 상태: 2단계 (서버 함수로 메모 읽기)
+## 현재 상태: 3단계 저장점 (로그인과 메모 API)
 
-- 메모 네 건은 Supabase `public.notes`에만 있습니다(RLS 켜짐, 정책 없음, anon·authenticated 권한 없음, `owner_id`는 비어 있음).
-- 같은 호스트의 서버 함수 `/api/notes`가 서버 전용 키로 테이블을 읽어 `{ notes: [{ title, content }] }`를 돌려줍니다. 키가 없으면 503, GET이 아니면 405입니다.
-- 첫 화면 `/`은 `/api/notes`에서 메모를 받아 카드로 보여 줍니다.
-- 정적 `data.json`은 저장소와 배포에서 모두 지웠습니다. `/data.json`은 404이고, 빌드는 `public/data.json`을 만들지 않습니다(남아 있으면 지움). `/aleph.json`은 계속 만들어집니다.
-- 모든 응답에 `X-Content-Type-Options: nosniff`가 붙습니다.
+작동하는 것:
 
-Vercel 환경변수(값은 Vercel 프로젝트 설정의 비밀 입력란에만 넣고 Git·채팅에 적지 않습니다):
-
-| 이름 | 용도 | 값을 받는 곳 |
-|---|---|---|
-| `SUPABASE_URL` | 3단계부터 쓰지 않음. 주소는 `aleph.config.json`의 `identityProvider.issuer`에서 가져옴 | - |
-| `SUPABASE_SECRET_KEY` | 서버 함수 전용 키(RLS를 우회하므로 화면 코드에 넣지 않음) | Supabase 대시보드의 API Keys > Secret key |
-
-확인 방법:
-
-1. 시크릿 창에서 `/`을 열어 메모 카드 네 장이 보이는지 봅니다.
-2. 시크릿 창에서 `/data.json`을 열어 404(메모·확인 표시 없음)인지 봅니다.
-3. `/api/notes`가 메모 네 건을 JSON으로 돌려주는지 봅니다.
-
-다시 실행하는 방법:
-
-```bash
-npm ci
-npm run build -- --local     # 로컬 화면만 확인 (서버 함수·배포·접수 증명 아님)
-npm run test:r5
-npm run bundle               # bundle-notes.json(커밋하지 않음)이 있어야 하며, 배포 주소에 실제 비로그인 요청을 보냄
-```
-
-## 3단계 진행 중: 로그인과 메모 API
-
-- 첫 화면에 Supabase Auth 이메일·비밀번호 로그인·로그아웃이 있습니다(공식 `supabase-js`, 공개용 URL·publishable key만 화면 코드에 있음).
+- 첫 화면에 Supabase Auth 이메일·비밀번호 로그인·로그아웃이 있습니다(공식 `supabase-js`, 공개용 URL·publishable key만 화면 코드에 있음). 로그인 실패 이유를 화면에 보여 줍니다.
+- 로그인하면 "새 가상 메모" 입력란과 내 메모 목록이 보이고, 메모마다 수정·삭제 버튼이 있습니다. 로그인하지 않으면 메모 요청을 보내지 않습니다.
 - 모든 메모 API는 시작 틀의 `src/verify-login.mjs`(`createLoginVerifier`)로 `Authorization: Bearer` 토큰만 검사합니다. 토큰이 없거나 검사에 실패하면 자료 없이 `401 LOGIN_REQUIRED`입니다. 브라우저가 보낸 userId·role·owner_id는 읽지 않습니다.
-- 검사에 쓰는 발급자 정보는 `aleph.config.json`의 `identityProvider`(issuer, audience, jwksUrl)에 있습니다. 비밀 키는 Vercel 환경변수 `SUPABASE_SECRET_KEY`에만 있습니다.
+- 검사에 쓰는 발급자 정보는 `aleph.config.json`의 `identityProvider`(issuer, audience, jwksUrl)에 있습니다.
+- 메모는 Supabase `public.notes`에만 있습니다(RLS 켜짐, 정책 없음, anon·authenticated 권한 없음). 정적 `data.json`은 없고 `/data.json`은 404입니다. `/aleph.json`은 빌드 때 만들어집니다. 모든 응답에 `X-Content-Type-Options: nosniff`가 붙습니다.
 
-| 경로 | 요청 | 응답 |
+| 경로 (`allowedRoutes`) | 요청 | 응답 |
 |---|---|---|
 | `GET /api/notes` | - | 로그인 사용자(`owner_id` = 서버가 확인한 ID)의 메모 배열 `[{id,title,body}]` |
 | `POST /api/notes` | `{id?, title, body}` (id는 UUID, 없으면 서버가 생성) | `201 {id}`, 같은 id면 409. `owner_id`는 서버가 확인한 ID |
@@ -107,9 +81,32 @@ npm run bundle               # bundle-notes.json(커밋하지 않음)이 있어�
 | `PUT /api/notes/:id` | `{title, body}` | 수정된 `{id,title,body}`, 없으면 404 |
 | `DELETE /api/notes/:id` | - | 204, 지운 뒤 GET은 404 |
 
-- 같은 경로를 `aleph.config.json`의 `allowedRoutes`에 적었습니다. 처리 코드는 `src/notes-api.mjs`, 경로 파일은 `api/notes.js`, `api/notes/[id].js`입니다.
-- 메모의 UUID는 `notes.note_id` 칸입니다(`supabase/step3-notes-uuid-id.sql`). 1단계에서 옮긴 가상 메모 네 건은 `owner_id`가 비어 있어 누구의 목록에도 나오지 않습니다.
+- 처리 코드는 `src/notes-api.mjs`, 경로 파일은 `api/notes.js`, `api/notes/[id].js`입니다. 메모 UUID는 `notes.note_id` 칸입니다(`supabase/step3-notes-uuid-id.sql`).
+- 1단계에서 옮긴 가상 메모 네 건은 `owner_id`가 비어 있어 누구의 목록에도 나오지 않습니다.
 - **알려진 허점(4단계에서 고침):** 한 건 GET·PUT·DELETE는 아직 소유자를 검사하지 않습니다. 로그인한 B가 A 메모의 id를 알면 읽고 고치고 지울 수 있습니다.
+- 판정 규칙(`RULE_IDS`)은 시작 틀의 전체 거부 규칙 `starter.deny` 하나뿐입니다.
+
+Vercel 환경변수(값은 Vercel 프로젝트 설정의 비밀 입력란에만 넣고 Git·채팅에 적지 않습니다):
+
+| 이름 | 용도 | 값을 받는 곳 |
+|---|---|---|
+| `SUPABASE_SECRET_KEY` | 서버 함수 전용 키(RLS를 우회하므로 화면 코드에 넣지 않음) | Supabase 대시보드의 API Keys > Secret key |
+| `SUPABASE_URL` | 3단계부터 쓰지 않음. 주소는 `identityProvider.issuer`에서 가져옴 | - |
+
+확인 방법:
+
+1. 시크릿 창에서 `/`을 열면 "로그인하지 않음"이 보이고 메모·입력란은 보이지 않습니다.
+2. A로 로그인해 메모를 추가·수정·삭제합니다. 삭제한 메모는 목록에서 사라집니다.
+3. 로그아웃하면 메모가 다시 보이지 않습니다. `/data.json`은 404입니다.
+
+다시 실행하는 방법:
+
+```bash
+npm ci
+npm run build -- --local     # 로컬 화면만 확인 (서버 함수·로그인·배포 증명 아님)
+npm run test:r5
+npm run bundle               # bundle-notes.json(커밋하지 않음)이 있어야 하며, 배포 주소에 실제 비로그인 요청을 보냄
+```
 
 `npm run bundle`의 점검 결과는 학생이 직접 보낸 요청의 기록이며 심판의 판정이 아닙니다.
 

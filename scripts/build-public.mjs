@@ -6,8 +6,8 @@ const root = resolve(import.meta.dirname, '..');
 const source = resolve(root, 'data.json');
 const output = resolve(root, 'public', 'data.json');
 const config = JSON.parse(await readFile(resolve(root, 'aleph.config.json'), 'utf8'));
-if (config.step !== 1 && config.step !== 2) {
-  throw new Error('3단계부터는 공개 data.json 복사를 끝내고 보호된 자료 API로 바꾸세요.');
+if (![1, 2, 3].includes(config.step)) {
+  throw new Error('4단계부터는 이 빌드가 그 단계 구현과 맞는지 먼저 확인하세요.');
 }
 if (config.step === 1) {
   const data = JSON.parse(await readFile(source, 'utf8'));
@@ -18,10 +18,10 @@ if (config.step === 1) {
   await copyFile(source, output);
   console.log('실습용 공개 자료를 public/data.json에 복사했습니다.');
 } else {
-  // 2단계부터 메모는 Supabase 테이블에만 두고 화면은 /api/notes 서버 함수로 읽습니다.
+  // 2단계부터 메모는 Supabase 테이블에만 두고 화면은 /api/notes 서버 함수로 읽습니다(3단계부터 로그인 필요).
   // 공개 폴더에 data.json이 남아 있으면 지워서 정적 메모·확인 표시가 배포되지 않게 합니다.
   await rm(output, { force: true });
-  console.log('2단계: 공개 data.json을 만들지 않습니다. 메모는 /api/notes에서 읽습니다.');
+  console.log(`${config.step}단계: 공개 data.json을 만들지 않습니다. 메모는 /api/notes에서 읽습니다.`);
 }
 if (!process.argv.includes('--local')) {
   const identity = deploymentIdentity(process.env, config);
