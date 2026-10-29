@@ -61,9 +61,9 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 - **과거 노출은 해소되지 않았습니다.** 옛 커밋 `5b9af2f`가 공개 저장소에 남아 메모 네 건을 누구나 읽을 수 있습니다.
 - 옛 배포 주소가 아직 1단계 `data.json`을 내보내고 있을 수 있습니다. 확인 전까지는 노출 중으로 봅니다.
 - Supabase REST API(`/rest/v1/notes`)에 anon 키로 보낸 비로그인 요청 시험은 **미실행**입니다. 차단 여부는 SQL Editor의 권한·RLS 확인 표로만 확인했습니다.
-- (3단계에서 반영) 메모 API는 이제 로그인 토큰을 검사합니다. 아래 "현재 상태"를 보세요.
+- (3·4단계에서 반영) 메모 API는 로그인 토큰을 검사하고, 4단계부터 본인 메모만 허용합니다. 아래 "현재 상태"를 보세요.
 
-## 현재 상태: 3단계 저장점 (로그인과 메모 API)
+## 현재 상태: 4단계 저장점 (로그인해도 내 자료만)
 
 작동하는 것:
 
@@ -77,13 +77,15 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 |---|---|---|
 | `GET /api/notes` | - | 로그인 사용자(`owner_id` = 서버가 확인한 ID)의 메모 배열 `[{id,title,body}]` |
 | `POST /api/notes` | `{id?, title, body}` (id는 UUID, 없으면 서버가 생성) | `201 {id}`, 같은 id면 409. `owner_id`는 서버가 확인한 ID |
-| `GET /api/notes/:id` | - | `{id,title,body}`, 없으면 404 |
-| `PUT /api/notes/:id` | `{title, body}` | 수정된 `{id,title,body}`, 없으면 404 |
-| `DELETE /api/notes/:id` | - | 204, 지운 뒤 GET은 404 |
+| `GET /api/notes/:id` | - | 본인 메모면 `{id,title,body}`, 없거나 남의 메모면 404 |
+| `PUT /api/notes/:id` | `{title, body}` | 본인 메모면 수정된 `{id,title,body}`, 없거나 남의 메모면 404. 본문 `owner_id`가 본인과 다르면 403 |
+| `DELETE /api/notes/:id` | - | 본인 메모면 204, 없거나 남의 메모면 404. 지운 뒤 GET은 404 |
 
 - 처리 코드는 `src/notes-api.mjs`, 경로 파일은 `api/notes.js`, `api/notes/[id].js`입니다. 메모 UUID는 `notes.note_id` 칸입니다(`supabase/step3-notes-uuid-id.sql`).
-- 1단계에서 옮긴 가상 메모 네 건은 `owner_id`가 비어 있어 누구의 목록에도 나오지 않습니다.
-- **알려진 허점(4단계에서 고침):** 한 건 GET·PUT·DELETE는 아직 소유자를 검사하지 않습니다. 로그인한 B가 A 메모의 id를 알면 읽고 고치고 지울 수 있습니다.
+- **4단계 소유자 검사(API):** 모든 읽기·수정·삭제는 DB `owner_id`가 검증된 사용자 ID와 같은 행만 대상으로 합니다. URL·쿼리·본문의 `owner_id`·`userId`는 믿지 않습니다. 남의 메모는 없는 메모와 똑같이 404라 존재 여부도 드러나지 않습니다. 수정은 기존 행과 새 행의 소유자를 모두 본인으로 확인합니다.
+- 메모 소유자: 1단계 가상 메모 네 건은 A, "B 시험 메모" 한 건은 B입니다(`supabase/step4-assign-owners.sql`, 적용함).
+- **DB 권한(RLS):** RLS는 켜져 있고 정책은 없으며 anon·authenticated 권한도 없습니다. 최소 권한·소유자 정책 SQL(`supabase/step4-notes-rls.sql`)은 **제안만 했고 아직 적용하지 않았습니다.** 앱 API는 서버 전용 키를 써서 RLS를 거치지 않으므로 소유자 검사는 API가 맡습니다.
+- 확인 상태: A로 추가·수정·삭제는 3단계에 화면에서 확인했습니다. 4단계 A/B 상대 메모 거부는 로컬 흉내 시험 22개로 확인했고, 실제 A/B 로그인 시험은 학생이 화면·콘솔에서 확인합니다.
 - 판정 규칙(`RULE_IDS`)은 시작 틀의 전체 거부 규칙 `starter.deny` 하나뿐입니다.
 
 Vercel 환경변수(값은 Vercel 프로젝트 설정의 비밀 입력란에만 넣고 Git·채팅에 적지 않습니다):
@@ -96,8 +98,9 @@ Vercel 환경변수(값은 Vercel 프로젝트 설정의 비밀 입력란에만 
 확인 방법:
 
 1. 시크릿 창에서 `/`을 열면 "로그인하지 않음"이 보이고 메모·입력란은 보이지 않습니다.
-2. A로 로그인해 메모를 추가·수정·삭제합니다. 삭제한 메모는 목록에서 사라집니다.
-3. 로그아웃하면 메모가 다시 보이지 않습니다. `/data.json`은 404입니다.
+2. A로 로그인하면 A 메모(가상 메모 네 건 포함)만 보이고, 추가·수정·삭제가 됩니다.
+3. B로 로그인하면 B 메모만 보입니다. B로 A 메모 id에 GET·PUT·DELETE를 보내면 모두 404이고 A 메모는 그대로입니다.
+4. 로그아웃하면 메모가 다시 보이지 않습니다. `/data.json`은 404입니다.
 
 다시 실행하는 방법:
 
