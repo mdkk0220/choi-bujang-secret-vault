@@ -1,7 +1,8 @@
-// 3단계 메모 API 공통 처리. api/notes.js(목록·추가)와 api/notes/[id].js(한 건 조회·수정·삭제)가 함께 씁니다.
-// 로그인 여부는 시작 틀의 src/verify-login.mjs가 확인한 사용자 ID로만 판단합니다.
-// 브라우저가 보낸 userId·role·owner_id는 읽지 않습니다. 추가할 때 owner_id는 서버가 확인한 ID로 저장합니다.
-// 아직 소유자 검사는 하지 않습니다: 로그인한 누구나 id로 남의 메모를 조회·수정·삭제할 수 있습니다(4단계에서 고칠 허점).
+// 메모 API 공통 처리. api/notes.js(목록·추가)와 api/notes/[id].js(한 건 조회·수정·삭제)가 함께 씁니다.
+// 로그인 여부와 사용자 ID는 시작 틀의 src/verify-login.mjs가 토큰에서 확인한 값만 씁니다.
+// 4단계 소유자 검사: 모든 읽기·수정·삭제는 DB의 owner_id가 확인된 사용자 ID와 같은 행만 대상으로 합니다.
+// URL·쿼리·본문의 owner_id·userId는 믿지 않습니다. 추가할 때 owner_id는 확인된 ID로 저장합니다.
+// 남의 메모는 존재 여부를 알려 주지 않도록 없는 메모와 똑같이 404로 답합니다.
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -13,6 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const TITLE_MAX = 200;
 const BODY_MAX = 5000;
 const COLUMNS = 'note_id, title, content';
+const OWNED_COLUMNS = 'note_id, title, content, owner_id';
 
 let verifier;
 let database;
@@ -31,6 +33,14 @@ function readBody(request) {
     } catch { /* fall through */ }
   }
   return null;
+}
+
+// 본문에 owner_id(또는 ownerId)가 들어 있으면 확인된 사용자 ID와 같아야 합니다. 다르면 소유자 변경 시도입니다.
+function ownerChangeAttempt(input, userId) {
+  for (const key of ['owner_id', 'ownerId']) {
+    if (Object.hasOwn(input, key) && input[key] !== userId) return true;
+  }
+  return false;
 }
 
 function validText(value, max, allowEmpty) {
@@ -95,7 +105,8 @@ export async function handleNotes(request, response, id) {
 
     const key = id.toLowerCase();
     if (method === 'GET') {
-      const { data, error } = await notes().select(COLUMNS).eq('note_id', key).maybeSingle();
+      const { data, error } = await notes().select(COLUMNS)
+        .eq('note_id', key).eq('owner_id', login.userId).maybeSingle();
       if (error) throw error;
       return data ? send(response, 200, toNote(data)) : send(response, 404, { error: 'NOTE_NOT_FOUND' });
     }
@@ -103,16 +114,25 @@ export async function handleNotes(request, response, id) {
     if (method === 'PUT') {
       const input = readBody(request);
       if (!input) return send(response, 400, { error: 'INVALID_JSON' });
+      if (ownerChangeAttempt(input, login.userId)) return send(response, 403, { error: 'OWNER_CHANGE_FORBIDDEN' });
+      if (input.id !== undefined && (typeof input.id !== 'string' || input.id.toLowerCase() !== key)) {
+        return send(response, 400, { error: 'NOTE_ID_MISMATCH' });
+      }
       if (!validText(input.title, TITLE_MAX, false) || !validText(input.body, BODY_MAX, true)) {
         return send(response, 400, { error: 'INVALID_NOTE' });
       }
-      const { data, error } = await notes().update({ title: input.title, content: input.body })
-        .eq('note_id', key).select(COLUMNS).maybeSingle();
+      // 기존 행: 본인 소유인 행만 고칩니다. 새 행: owner_id를 확인된 ID로 다시 적고, 결과도 본인 소유인지 확인합니다.
+      const { data, error } = await notes()
+        .update({ title: input.title, content: input.body, owner_id: login.userId })
+        .eq('note_id', key).eq('owner_id', login.userId).select(OWNED_COLUMNS).maybeSingle();
       if (error) throw error;
-      return data ? send(response, 200, toNote(data)) : send(response, 404, { error: 'NOTE_NOT_FOUND' });
+      if (!data) return send(response, 404, { error: 'NOTE_NOT_FOUND' });
+      if (data.owner_id !== login.userId) return send(response, 502, { error: 'NOTES_UNAVAILABLE' });
+      return send(response, 200, toNote(data));
     }
 
-    const { data, error } = await notes().delete().eq('note_id', key).select('note_id');
+    const { data, error } = await notes().delete()
+      .eq('note_id', key).eq('owner_id', login.userId).select('note_id');
     if (error) throw error;
     return data.length ? send(response, 204) : send(response, 404, { error: 'NOTE_NOT_FOUND' });
   } catch {
