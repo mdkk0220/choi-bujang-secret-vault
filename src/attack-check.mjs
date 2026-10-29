@@ -1,7 +1,7 @@
 // The student changes this check as each stage adds an attack to the same app.
 // Never return tokens, private keys, real names, or note bodies.
 export async function runAttackChecks(config) {
-  if (![1, 2, 3, 4].includes(config.step)) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
+  if (![1, 2, 3, 4, 5].includes(config.step)) throw new Error('이 단계의 공격 점검을 src/attack-check.mjs에 구현해 주세요.');
   let app;
   try {
     app = new URL(config.publicAppUrl);
@@ -34,6 +34,7 @@ export async function runAttackChecks(config) {
 
   if (config.step === 3) return runStep3Checks(config, app, response, staticText);
   if (config.step === 4) return runStep4Checks(config, app, response, staticText);
+  if (config.step === 5) return runStep5Checks(config, app, response, staticText);
 
   // 2단계: 정적 /data.json에 확인 표시·메모가 없고, 화면은 같은 호스트의 /api/notes에서 메모를 받는지 비로그인으로 요청합니다.
   // 메모 본문은 기록하지 않고 개수만 적습니다.
@@ -165,5 +166,51 @@ async function runStep4Checks(config, app, staticResponse, staticText) {
       observed: '미실행: RLS·최소 권한 SQL은 제안만 하고 아직 적용하지 않음 (현재 authenticated 권한 없음, 정책 0개)' },
     { attackId: 'supabase_anon_notes_read', expected: 'anon 키로 notes 테이블 읽기 요청이 거부되거나 0행',
       observed: '미실행: anon 키 요청은 보내지 않음. DB 조회로 anon 권한 없음만 확인' },
+  ];
+}
+
+// 5단계: 자료 요청이 서버 함수 한곳으로 모였는지 봅니다.
+// 1) 첫 화면 코드에 Supabase 자료 테이블을 직접 부르는 곳(.from(, /rest/v1)이 없는지
+// 2) originalApiUrl(원본 자료 경로)에 화면에 공개된 publishable key만 실어 직접 요청하면 거부되는지
+// 응답 본문은 기록하지 않고 상태 코드와 행 수만 적습니다. 키 값도 기록하지 않습니다.
+async function runStep5Checks(config, app, staticResponse, staticText) {
+  const base = await runStep4Checks(config, app, staticResponse, staticText);
+  const keep = base.filter(item => !['db_rls_owner_policies', 'supabase_anon_notes_read'].includes(item.attackId));
+  const page = await fetch(app, { redirect: 'error', signal: AbortSignal.timeout(10000) });
+  const html = page.ok ? await page.text() : '';
+  const directCalls = (html.match(/\.from\(|\/rest\/v1/gu) ?? []).length;
+  const publishableKey = html.match(/sb_publishable_[A-Za-z0-9_-]+/u)?.[0];
+
+  let original = '미확인: 화면에서 publishable key를 찾지 못해 요청을 보내지 않음';
+  if (typeof config.originalApiUrl !== 'string' || !config.originalApiUrl.startsWith('https://')) {
+    original = '미확인: aleph.config.json의 originalApiUrl이 없음';
+  } else if (publishableKey) {
+    try {
+      const res = await fetch(new URL('?select=*&limit=1', config.originalApiUrl), {
+        redirect: 'error', signal: AbortSignal.timeout(10000),
+        headers: { apikey: publishableKey, authorization: `Bearer ${publishableKey}` },
+      });
+      let detail = '';
+      try {
+        const body = await res.json();
+        if (Array.isArray(body)) detail = `, 행 ${body.length}개`;
+        else if (body && typeof body.code === 'string') detail = `, 오류 코드 ${body.code}`;
+      } catch {
+        // 본문이 JSON이 아니면 상태 코드만 적습니다.
+      }
+      original = `원본 자료 경로에 publishable key로 직접 GET: HTTP ${res.status}${detail}`;
+    } catch {
+      original = '미확인: 이 실행 환경에서 원본 자료 경로에 연결하지 못함(네트워크 오류)';
+    }
+  }
+
+  return [
+    ...keep,
+    { attackId: 'browser_direct_data_calls', expected: '첫 화면 코드에 자료 테이블 직접 호출(.from(, /rest/v1) 0건, 로그인만 Supabase Auth',
+      observed: `첫 화면 HTTP ${page.status}, 자료 테이블 직접 호출 흔적 ${directCalls}건` },
+    { attackId: 'original_api_direct_anon', expected: '원본 자료 경로에 anon(publishable) 키로 직접 요청하면 401·42501 등으로 거부, 행 0개',
+      observed: original },
+    { attackId: 'db_direct_grants', expected: 'notes 테이블에 PUBLIC·anon·authenticated 표·열·시퀀스 권한 없음, service_role만 유지',
+      observed: '이 점검 코드는 DB에 접속하지 않음. 코딩 도구의 Supabase 조회 2026-10-29: 세 역할 표·열·시퀀스 권한 없음, RLS 켜짐, service_role 권한 유지' },
   ];
 }

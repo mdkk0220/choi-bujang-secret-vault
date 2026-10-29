@@ -24,7 +24,7 @@
 
 ## 2단계 확인: 가상 메모 문장 검색
 
-2단계에서 가상 메모 네 건을 학습용 Supabase 테이블로 옮기고, 공개 `data.json`에는 확인 표시와 빈 `notes`만 남겼습니다. 아래 절차는 **지금 공개된 파일**에 메모 문장이 남았는지 보는 것입니다. 옛 공개 커밋과 옛 배포가 남아 있는 한, 과거에 공개된 사실은 해소되지 않습니다.
+2단계에서 가상 메모 네 건을 학습용 Supabase 테이블로 옮겼습니다(처음엔 공개 `data.json`에 확인 표시와 빈 `notes`를 남겼고, 2단계 후반에 정적 `data.json`을 지워 지금 `/data.json`은 404입니다). 아래 절차는 **지금 공개된 파일**에 메모 문장이 남았는지 보는 것입니다. 옛 공개 커밋과 옛 배포가 남아 있는 한, 과거에 공개된 사실은 해소되지 않습니다.
 
 검색 대상은 1단계 메모의 본문 네 개와 띄어쓰기가 있는 제목 두 개입니다. 이 README가 검색에 걸리지 않도록 문장 대신 아래 패턴만 적습니다.
 
@@ -46,7 +46,7 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 
 명령줄이 없으면 시크릿 창에서 각 주소를 열고 Ctrl+F로 `실습용 가상`, `리추얼`, `행정`을 찾습니다.
 
-### 검색 결과 (2026-10-28, 커밋 `50bd433` 배포 기준)
+### 검색 결과 (2026-10-28, 커밋 `50bd433` 배포 기준, 당시 기록)
 
 | 대상 | 결과 |
 |---|---|
@@ -61,9 +61,9 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 - **과거 노출은 해소되지 않았습니다.** 옛 커밋 `5b9af2f`가 공개 저장소에 남아 메모 네 건을 누구나 읽을 수 있습니다.
 - 옛 배포 주소가 아직 1단계 `data.json`을 내보내고 있을 수 있습니다. 확인 전까지는 노출 중으로 봅니다.
 - Supabase REST API(`/rest/v1/notes`)에 anon 키로 보낸 비로그인 요청 시험은 **미실행**입니다. 차단 여부는 SQL Editor의 권한·RLS 확인 표로만 확인했습니다.
-- (3·4단계에서 반영) 메모 API는 로그인 토큰을 검사하고, 4단계부터 본인 메모만 허용합니다. 아래 "현재 상태"를 보세요.
+- (3·4·5단계에서 반영) 메모 API는 로그인 토큰을 검사하고, 4단계부터 본인 메모만 허용하며, 5단계부터 자료 테이블 직접 권한을 모두 거뒀습니다. 아래 "현재 상태"를 보세요.
 
-## 현재 상태: 4단계 저장점 (로그인해도 내 자료만)
+## 현재 상태: 5단계 저장점 (자료 요청을 서버 한곳으로)
 
 작동하는 것:
 
@@ -71,7 +71,7 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 - 로그인하면 "새 가상 메모" 입력란과 내 메모 목록이 보이고, 메모마다 수정·삭제 버튼이 있습니다. 로그인하지 않으면 메모 요청을 보내지 않습니다.
 - 모든 메모 API는 시작 틀의 `src/verify-login.mjs`(`createLoginVerifier`)로 `Authorization: Bearer` 토큰만 검사합니다. 토큰이 없거나 검사에 실패하면 자료 없이 `401 LOGIN_REQUIRED`입니다. 브라우저가 보낸 userId·role·owner_id는 읽지 않습니다.
 - 검사에 쓰는 발급자 정보는 `aleph.config.json`의 `identityProvider`(issuer, audience, jwksUrl)에 있습니다.
-- 메모는 Supabase `public.notes`에만 있습니다(RLS 켜짐, 정책 없음, anon·authenticated 권한 없음). 정적 `data.json`은 없고 `/data.json`은 404입니다. `/aleph.json`은 빌드 때 만들어집니다. 모든 응답에 `X-Content-Type-Options: nosniff`가 붙습니다.
+- 메모는 Supabase `public.notes`에만 있고, 메모 자료 요청은 모두 같은 주소의 서버 함수 `/api/notes`로만 갑니다. 브라우저 코드가 Supabase에 직접 붙는 곳은 로그인(Auth)뿐입니다. 정적 `data.json`은 없고 `/data.json`은 404입니다. `/aleph.json`은 빌드 때 만들어집니다. 모든 응답에 `X-Content-Type-Options: nosniff`가 붙습니다.
 
 | 경로 (`allowedRoutes`) | 요청 | 응답 |
 |---|---|---|
@@ -84,7 +84,8 @@ curl -s https://raw.githubusercontent.com/mdkk0220/choi-bujang-secret-vault/5b9a
 - 처리 코드는 `src/notes-api.mjs`, 경로 파일은 `api/notes.js`, `api/notes/[id].js`입니다. 메모 UUID는 `notes.note_id` 칸입니다(`supabase/step3-notes-uuid-id.sql`).
 - **4단계 소유자 검사(API):** 모든 읽기·수정·삭제는 DB `owner_id`가 검증된 사용자 ID와 같은 행만 대상으로 합니다. URL·쿼리·본문의 `owner_id`·`userId`는 믿지 않습니다. 남의 메모는 없는 메모와 똑같이 404라 존재 여부도 드러나지 않습니다. 수정은 기존 행과 새 행의 소유자를 모두 본인으로 확인합니다.
 - 메모 소유자: 1단계 가상 메모 네 건은 A, "B 시험 메모" 한 건은 B입니다(`supabase/step4-assign-owners.sql`, 적용함).
-- **DB 권한(RLS):** RLS는 켜져 있고 정책은 없으며 anon·authenticated 권한도 없습니다. 최소 권한·소유자 정책 SQL(`supabase/step4-notes-rls.sql`)은 **제안만 했고 아직 적용하지 않았습니다.** 앱 API는 서버 전용 키를 써서 RLS를 거치지 않으므로 소유자 검사는 API가 맡습니다.
+- **5단계 원본 직접 접근 차단(DB):** `public.notes`에 PUBLIC·anon·authenticated의 표·열·시퀀스 권한이 없습니다(2026-10-29 DB 조회). RLS는 켜져 있고 정책은 없습니다. 서버 함수가 쓰는 `service_role` 권한만 남아 있습니다. 회수 SQL과 적용 전후 확인 방법은 `supabase/step5-revoke-notes-direct.sql`입니다. 4단계 제안 `supabase/step4-notes-rls.sql`은 authenticated에 권한을 주므로 쓰지 않습니다.
+- 원본 자료 경로(`aleph.config.json`의 `originalApiUrl`): `https://jmnqwlnopvadomxdsndu.supabase.co/rest/v1/notes`. anon(publishable) 키로 직접 요청하면 권한이 없어 거부되어야 합니다. 이 직접 요청은 코딩 도구 환경에서 연결이 막혀 아직 보내 보지 못했습니다(심판이 anon 키로 확인).
 - 확인 상태 (2026-10-29, 실제 배포):
   - A 화면: A 메모 다섯 건만 보이고 B 시험 메모는 보이지 않음. A가 자기 메모 수정·추가·삭제 성공(Supabase 로그에서 A 소유 조건으로만 처리됨).
   - B 화면: B 시험 메모 한 건만 보임. B가 자기 메모 수정 성공(B 소유 조건으로만 처리됨).
@@ -105,6 +106,7 @@ Vercel 환경변수(값은 Vercel 프로젝트 설정의 비밀 입력란에만 
 2. A로 로그인하면 A 메모(가상 메모 네 건 포함)만 보이고, 추가·수정·삭제가 됩니다.
 3. B로 로그인하면 B 메모만 보입니다. B로 A 메모 id에 GET·PUT·DELETE를 보내면 모두 404이고 A 메모는 그대로입니다.
 4. 로그아웃하면 메모가 다시 보이지 않습니다. `/data.json`은 404입니다.
+5. 원본 자료 경로에 publishable key로 직접 요청하면 401(`permission denied for table notes`)로 거부되고 행이 오지 않아야 합니다. 화면의 A 동작은 그대로 유지되어야 합니다.
 
 다시 실행하는 방법:
 
