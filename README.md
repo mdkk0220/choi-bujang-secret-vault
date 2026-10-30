@@ -145,3 +145,28 @@ node xdr/brute-force/respond.mjs --check      # 명확한 공격만 막히고 �
 ```
 
 위 결과는 로컬 연습이며 심판의 판정이 아닙니다. 심판은 격리 환경에서 `decide.mjs`를 직접 다시 실행합니다.
+
+## 보너스 xdr-02 저장점: 웹 주입 공격 탐지 (web-injection)
+
+작동하는 것 (모두 `xdr/web-injection/` 안, 경보 원본 `xdr/fixtures/web-injection.json`은 고치지 않음):
+
+- `patterns.json`: T1190 근거 패턴 세 개. 요청 인자 안의 SQL 구문, 스크립트 태그(근거는 OWASP XSS 설명), 경로 거슬러 올라가기(../) 반복. 실제 공격 문자열과 숫자 기준은 넣지 않았습니다.
+- `decide.mjs`: 위 패턴을 파일 맨 위 상수로 옮긴 `decide(alert)`. `import`·파일 읽기·쓰기·바깥 요청 없이 혼자 계산합니다. 확신도 0.85 이상 `block`, 0.5 이상 `alert`, 그 아래 `record`. T1190 표시만 있고 세 패턴 표기를 못 찾은 경보는 최대 0.84라 block 하지 않습니다.
+- `read-alerts.mjs`: 확인용 읽기 모듈(시각·출발 주소·계정·규칙 수준·설명만, 요청 주소는 읽지 않음). `decide.mjs`가 불러오지 않습니다.
+- `respond.mjs`: `block` 후보만 출발 주소 기준 거부 규칙(만료 24시간, 근거 경보 번호)으로 `deny-rules.json`에 쓰고, `block`·`alert` 알림을 `xdr/alerts.log`에 한 줄씩 쌓습니다. 요청 주소는 규칙·로그에 남기지 않습니다.
+- `result.json`: `npm run xdr:run -- web-injection` 결과. 로컬 기준 `block 7 · alert 10 · record 9`, 정상 이벤트(wi-18~26) block 0건.
+
+남은 약점:
+
+- **wi-06(명령 구분자 반복)은 alert로 남습니다.** 명령 구분자는 근거를 정한 신호 범위 밖이라 패턴에 넣지 않았습니다.
+- **판정기 미연결.** 판정 요청 계약에 출발 주소 값이 없어 거부 규칙은 `appliedToDecider: false`이고 실제 접속을 막지 않습니다.
+
+다시 실행하는 방법 (인터넷 없이 됨):
+
+```bash
+node xdr/web-injection/read-alerts.mjs        # 경보 26건 = 뽑은 줄 26줄
+npm run xdr:run -- web-injection              # result.json 갱신
+node xdr/web-injection/respond.mjs --check    # 막힘 7 · 통과 19 · 어긋남 0, 만료 뒤 0건
+```
+
+위 결과는 로컬 연습이며 심판의 판정이 아닙니다.

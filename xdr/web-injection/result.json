@@ -1,0 +1,167 @@
+{
+  "schema": "aleph.xdr.result.v1",
+  "moduleKey": "web-injection",
+  "decisions": [
+    {
+      "alertId": "wi-01",
+      "action": "block",
+      "confidence": 1,
+      "reason": "요청 인자 안의 SQL 구문(T1190) 뚜렷하게 일치"
+    },
+    {
+      "alertId": "wi-02",
+      "action": "block",
+      "confidence": 0.97,
+      "reason": "요청 인자 안의 스크립트 태그(T1190) 뚜렷하게 일치"
+    },
+    {
+      "alertId": "wi-03",
+      "action": "block",
+      "confidence": 0.92,
+      "reason": "경로 거슬러 올라가기(../) 반복(T1190) 뚜렷하게 일치"
+    },
+    {
+      "alertId": "wi-04",
+      "action": "block",
+      "confidence": 1,
+      "reason": "요청 인자 안의 SQL 구문(T1190) 뚜렷하게 일치"
+    },
+    {
+      "alertId": "wi-05",
+      "action": "block",
+      "confidence": 0.97,
+      "reason": "요청 인자 안의 SQL 구문(T1190) 뚜렷하게 일치"
+    },
+    {
+      "alertId": "wi-06",
+      "action": "alert",
+      "confidence": 0.64,
+      "reason": "T1190 표시만 있고 세 패턴과 직접 일치 없음(확인 필요)"
+    },
+    {
+      "alertId": "wi-07",
+      "action": "block",
+      "confidence": 1,
+      "reason": "경로 거슬러 올라가기(../) 반복(T1190) 뚜렷하게 일치"
+    },
+    {
+      "alertId": "wi-08",
+      "action": "block",
+      "confidence": 0.97,
+      "reason": "요청 인자 안의 SQL 구문(T1190) 뚜렷하게 일치"
+    },
+    {
+      "alertId": "wi-09",
+      "action": "alert",
+      "confidence": 0.55,
+      "reason": "T1190 표시만 있고 세 패턴과 직접 일치 없음(확인 필요)"
+    },
+    {
+      "alertId": "wi-10",
+      "action": "alert",
+      "confidence": 0.56,
+      "reason": "요청 인자 안의 SQL 구문(T1190) 일부 일치"
+    },
+    {
+      "alertId": "wi-11",
+      "action": "alert",
+      "confidence": 0.55,
+      "reason": "요청 인자 안의 스크립트 태그(T1190) 일부 일치"
+    },
+    {
+      "alertId": "wi-12",
+      "action": "alert",
+      "confidence": 0.53,
+      "reason": "경로 거슬러 올라가기(../) 반복(T1190) 일부 일치"
+    },
+    {
+      "alertId": "wi-13",
+      "action": "alert",
+      "confidence": 0.54,
+      "reason": "T1190 표시만 있고 세 패턴과 직접 일치 없음(확인 필요)"
+    },
+    {
+      "alertId": "wi-14",
+      "action": "alert",
+      "confidence": 0.6,
+      "reason": "요청 인자 안의 SQL 구문(T1190) 일부 일치"
+    },
+    {
+      "alertId": "wi-15",
+      "action": "alert",
+      "confidence": 0.55,
+      "reason": "T1190 표시만 있고 세 패턴과 직접 일치 없음(확인 필요)"
+    },
+    {
+      "alertId": "wi-16",
+      "action": "alert",
+      "confidence": 0.57,
+      "reason": "T1190 표시만 있고 세 패턴과 직접 일치 없음(확인 필요)"
+    },
+    {
+      "alertId": "wi-17",
+      "action": "alert",
+      "confidence": 0.55,
+      "reason": "T1190 표시만 있고 세 패턴과 직접 일치 없음(확인 필요)"
+    },
+    {
+      "alertId": "wi-18",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-19",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-20",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-21",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-22",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-23",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-24",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-25",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    },
+    {
+      "alertId": "wi-26",
+      "action": "record",
+      "confidence": 0,
+      "reason": "일치 패턴 없음(주입 신호 없음)"
+    }
+  ],
+  "counts": {
+    "block": 7,
+    "alert": 10,
+    "record": 9
+  }
+}

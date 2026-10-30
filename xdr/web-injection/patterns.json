@@ -1,0 +1,35 @@
+{
+  "schema": "aleph.xdr.patterns.v1",
+  "moduleKey": "web-injection",
+  "basis": "MITRE ATT&CK T1190 Exploit Public-Facing Application",
+  "note": "패턴마다 근거는 MITRE ATT&CK T1190과 OWASP 공격 설명입니다. 실제 공격 문자열은 적지 않고 어떤 모양을 찾는지만 적습니다. 몇 번부터 공격으로 볼지 같은 숫자 기준은 근거 자료에 없어 decide.mjs 단계에서 정합니다.",
+  "patterns": [
+    {
+      "id": "wi.sql-in-parameter",
+      "name": "요청 인자 안의 SQL 구문",
+      "mitre": "T1190",
+      "fields": ["timestamp", "data.srcip", "data.url", "data.count", "rule.level", "rule.description"],
+      "condition": "요청 인자(검색어·id 등)에 SQL 구문 조각이나 조회를 이어 붙이는 표기가 들어 있고, 같은 출발 주소에서 반복된다.",
+      "evidence": "MITRE ATT&CK T1190은 외부 공개 앱의 약점을 악용하는 기법이며, 사례로 SQL 주입을 통한 최초 침투(APT39 등)를 든다.",
+      "source": "https://attack.mitre.org/techniques/T1190/"
+    },
+    {
+      "id": "wi.script-tag-in-parameter",
+      "name": "요청 인자 안의 스크립트 태그",
+      "mitre": "T1190",
+      "fields": ["timestamp", "data.srcip", "data.url", "data.count", "rule.level", "rule.description"],
+      "condition": "요청 인자에 스크립트 태그 같은 삽입 표기가 들어 있고, 같은 출발 주소에서 반복된다. '스크립트'라는 낱말만 있는 일반 검색은 해당하지 않는다.",
+      "evidence": "OWASP는 크로스 사이트 스크립팅을 웹 앱 입력에 브라우저용 스크립트를 넣는 주입 공격으로 설명하며, 이는 T1190이 말하는 공개 앱 입력 처리 약점의 악용에 해당한다.",
+      "source": "https://owasp.org/www-community/attacks/xss/"
+    },
+    {
+      "id": "wi.path-traversal-repeat",
+      "name": "경로 거슬러 올라가기(../) 반복",
+      "mitre": "T1190",
+      "fields": ["timestamp", "data.srcip", "data.url", "data.count", "rule.level", "rule.description"],
+      "condition": "파일 경로 인자에 상위 폴더로 올라가는 ../ 표기가 여러 단계 이어지고, 같은 출발 주소에서 반복된다.",
+      "evidence": "OWASP는 ../ 표기로 웹 루트 밖 파일에 접근하는 공격을 경로 이탈로 설명하고, MITRE ATT&CK T1190 사례(C0017)에도 디렉터리 이탈 취약점 악용이 있다.",
+      "source": "https://owasp.org/www-community/attacks/Path_Traversal"
+    }
+  ]
+}
