@@ -120,3 +120,28 @@ npm run bundle               # bundle-notes.json(커밋하지 않음)이 있어�
 `npm run bundle`의 점검 결과는 학생이 직접 보낸 요청의 기록이며 심판의 판정이 아닙니다.
 
 `src/decider.mjs`와 `src/detect.mjs`의 로컬 시험은 반 엔진이나 운영 심판의 결과가 아닙니다. 1단계 이후 제출 묶음 계약 `aleph.defense.submission.v2`는 `scripts/bundle.mjs`에 남아 있으며, 코딩 도구가 해당 단계의 최신 배포 주소와 Git 원격을 맞춘 뒤 사용합니다.
+
+## 보너스 xdr-01 저장점: 무차별 로그인 공격 탐지 (brute-force)
+
+작동하는 것 (모두 `xdr/brute-force/` 안, 경보 원본 `xdr/fixtures/brute-force.json`은 고치지 않음):
+
+- `patterns.json`: MITRE ATT&CK T1110 근거 패턴 두 개. 같은 주소의 짧은 시간 로그인 실패 연속(T1110.001), 여러 계정에 같은 비밀번호 대입(T1110.003). 숫자 기준은 MITRE에 없어 넣지 않았습니다.
+- `decide.mjs`: 위 패턴을 파일 맨 위 상수로 옮긴 `decide(alert)`. `import`·파일 읽기·쓰기·바깥 요청 없이 혼자 계산합니다. 확신도 0.85 이상 `block`, 0.5 이상 `alert`, 그 아래 `record`.
+- `read-alerts.mjs`: 확인용 읽기 모듈(시각·출발 주소·계정·규칙 수준·설명만, 비밀값 모양은 가림). `decide.mjs`가 불러오지 않습니다.
+- `respond.mjs`: `block` 후보만 출발 주소 기준 거부 규칙(만료 24시간, 근거 경보 번호)으로 `deny-rules.json`에 쓰고, `block`·`alert` 알림을 `xdr/alerts.log`에 한 줄씩 쌓습니다. 계정으로는 막지 않고, 정상·애매 경보가 섞인 주소는 보류합니다.
+- `result.json`: `npm run xdr:run -- brute-force` 결과. 로컬 기준 `block 10 · alert 9 · record 9`, 정상 이벤트(bf-20~28) block 0건.
+
+남은 약점:
+
+- **판정기 미연결.** 판정 요청 계약(`docs/DECIDER_REQUEST.md`)에 출발 주소 값이 없어 거부 규칙은 `appliedToDecider: false`이고 실제 접속을 막지 않습니다. `src/decider.mjs`의 `RULE_IDS`는 바꾸지 않았습니다.
+- `deny-rules.json`과 `xdr/alerts.log`는 실행할 때마다 바뀌는 상태 파일이라 커밋하지 않습니다.
+
+다시 실행하는 방법 (인터넷 없이 됨):
+
+```bash
+node xdr/brute-force/read-alerts.mjs          # 경보 건수 = 뽑은 줄 수
+npm run xdr:run -- brute-force                # result.json 갱신, counts 확인
+node xdr/brute-force/respond.mjs --check      # 명확한 공격만 막히고 나머지 통과, 만료 뒤 0건
+```
+
+위 결과는 로컬 연습이며 심판의 판정이 아닙니다. 심판은 격리 환경에서 `decide.mjs`를 직접 다시 실행합니다.

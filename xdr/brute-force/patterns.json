@@ -1,0 +1,26 @@
+{
+  "schema": "aleph.xdr.patterns.v1",
+  "moduleKey": "brute-force",
+  "basis": "MITRE ATT&CK T1110 Brute Force",
+  "note": "패턴의 근거는 MITRE ATT&CK 기술 설명입니다. 몇 건·몇 분부터 공격으로 볼지 같은 숫자 기준은 MITRE에 없으므로 여기에 적지 않고 decide.mjs 단계에서 정합니다.",
+  "patterns": [
+    {
+      "id": "bf.same-source-failure-burst",
+      "name": "같은 주소의 짧은 시간 로그인 실패 연속",
+      "mitre": "T1110.001",
+      "fields": ["timestamp", "data.srcip", "data.srcuser", "data.count", "rule.level", "rule.description"],
+      "condition": "한 출발 주소(data.srcip)에서 짧은 시간 안에 로그인 실패가 연달아 쌓이고, 그 사이 성공이 없다.",
+      "evidence": "MITRE ATT&CK T1110.001(Password Guessing)은 자격 증명을 모르는 공격자가 비밀번호를 반복해 추측하는 기법이며, 탐지는 인증 실패 기록을 모아 보는 방식이다.",
+      "source": "https://attack.mitre.org/techniques/T1110/001/"
+    },
+    {
+      "id": "bf.password-spray",
+      "name": "여러 계정에 같은 비밀번호 대입",
+      "mitre": "T1110.003",
+      "fields": ["timestamp", "data.srcip", "data.srcuser", "data.accounts", "data.count", "rule.level", "rule.description"],
+      "condition": "한 출발 주소(data.srcip)가 서로 다른 여러 계정에 같은 비밀번호로 로그인 실패를 넣는다(계정마다 실패 수는 적을 수 있다).",
+      "evidence": "MITRE ATT&CK T1110.003(Password Spraying)은 흔한 비밀번호 하나나 소수를 여러 계정에 넣는 기법이며, 탐지 전략 DET0487은 여러 계정에 걸친 인증 실패를 본다.",
+      "source": "https://attack.mitre.org/techniques/T1110/003/"
+    }
+  ]
+}
